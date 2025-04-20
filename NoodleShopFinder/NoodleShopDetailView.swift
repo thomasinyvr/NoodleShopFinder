@@ -1,87 +1,168 @@
 import SwiftUI
 import FirebaseStorage
+import Foundation
 
 struct NoodleShopDetailView: View {
-    let shop: NoodleShop
+    let noodleShop: NoodleShop
     @Environment(\.dismiss) private var dismiss
-
+    @State private var retryCount = 0
+    @State private var isLoading = true
+    @State private var error: Error?
+    @State private var debugInfo: String = ""
+    
+    private let maxRetries = 3
+    
+    private func loadImage(for shop: NoodleShop) -> AnyView {
+        print("🔍 Loading image for shop: \(shop.name)")
+        print("📸 Photo URL: \(shop.photo_url)")
+        print("📸 Photo Reference: \(shop.photo_reference ?? "none")")
+        print("🔑 Using API key: \(Bundle.main.object(forInfoDictionaryKey: "GMSPlacesClientAPIKey") as? String ?? "default")")
+        
+        // If we have a photo reference, use it to generate the URL
+        let imageURL: URL? = {
+            if let photoReference = shop.photo_reference {
+                let apiKey = Bundle.main.object(forInfoDictionaryKey: "GMSPlacesClientAPIKey") as? String ?? "AIzaSyAYc5_1r_ExFfZn2F0s58LREqS3D2ixLr0"
+                let urlString = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=\(photoReference)&key=\(apiKey)"
+                return URL(string: urlString)
+            }
+            return URL(string: shop.photo_url)
+        }()
+        
+        guard let photoURL = imageURL else {
+            print("❌ Invalid URL format")
+            return AnyView(
+                Image(systemName: "photo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 30, height: 30)
+                    .frame(width: 50, height: 50)
+            )
+        }
+        
+        return AnyView(
+            AsyncImage(url: photoURL) { phase in
+                switch phase {
+                case .empty:
+                    ProgressView()
+                        .frame(width: 50, height: 50)
+                        .onAppear {
+                            print("⏳ Loading image for \(shop.name)")
+                            print("🌐 Request URL: \(photoURL.absoluteString)")
+                        }
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 50, height: 50)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .onAppear {
+                            print("✅ Successfully loaded image for \(shop.name)")
+                            print("📡 Response URL: \(photoURL.absoluteString)")
+                            debugInfo = "Successfully loaded image for \(shop.name)"
+                        }
+                case .failure(let error):
+                    VStack {
+                        Image(systemName: "photo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 30, height: 30)
+                        Text("Error")
+                            .font(.caption)
+                    }
+                    .frame(width: 50, height: 50)
+                    .onAppear {
+                        print("❌ Image loading failed for \(shop.name):")
+                        print("   - Error: \(error.localizedDescription)")
+                        if let urlError = error as? URLError {
+                            print("   - Code: \(urlError.code)")
+                            print("   - Description: \(urlError.localizedDescription)")
+                            print("   - Failing URL: \(urlError.failingURL?.absoluteString ?? "unknown")")
+                            print("   - Network Unavailable: \(urlError.code == .notConnectedToInternet)")
+                            print("   - Network Connection Lost: \(urlError.code == .networkConnectionLost)")
+                            print("   - Timed Out: \(urlError.code == .timedOut)")
+                            print("   - Bad Server Response: \(urlError.code == .badServerResponse)")
+                        }
+                        debugInfo = "Image Error: \(error.localizedDescription)"
+                    }
+                @unknown default:
+                    EmptyView()
+                }
+            }
+        )
+    }
+    
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    
-                    // Shop Image
-                    AsyncImage(url: URL(string: shop.photo_url)) { phase in
-                        switch phase {
-                        case .empty:
-                            ProgressView()
-                                .frame(height: 200)
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(height: 200)
-                                .clipped()
-                        case .failure:
-                            Image(systemName: "photo")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(height: 200)
-                                .foregroundColor(.gray)
-                                .background(Color.gray.opacity(0.2))
-                        @unknown default:
-                            EmptyView()
+                    if let error = error {
+                        VStack {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.largeTitle)
+                                .foregroundColor(.red)
+                            Text("Failed to load image")
+                                .font(.headline)
+                            Text(error.localizedDescription)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            if retryCount < maxRetries {
+                                Button("Retry") {
+                                    retryCount += 1
+                                    self.error = nil
+                                    self.isLoading = true
+                                }
+                                .buttonStyle(.bordered)
+                            }
                         }
+                        .frame(height: 200)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.gray.opacity(0.1))
+                    } else {
+                        loadImage(for: noodleShop)
+                            .frame(height: 200)
+                            .frame(maxWidth: .infinity)
                     }
-
-                    // Basic Info
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(shop.name)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(noodleShop.name)
                             .font(.title)
                             .fontWeight(.bold)
-
-                        Text(shop.address)
+                        
+                        if let rating = noodleShop.rating {
+                            HStack {
+                                Image(systemName: "star.fill")
+                                    .foregroundColor(.yellow)
+                                Text(String(format: "%.1f", rating))
+                                    .font(.headline)
+                            }
+                        }
+                        
+                        Text(noodleShop.address)
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-
-                        if let website = shop.website {
-                            Link("Visit Website", destination: URL(string: website)!)
-                                .font(.subheadline)
+                        
+                        if let servesBeer = noodleShop.serves_beer, servesBeer {
+                            Label("Serves Beer", systemImage: "wineglass")
                                 .foregroundColor(.blue)
                         }
+                        
+                        if let openNow = noodleShop.current_opening_hours?.open_now {
+                            Label(openNow ? "Open Now" : "Closed", 
+                                  systemImage: openNow ? "clock.fill" : "clock")
+                                .foregroundColor(openNow ? .green : .red)
+                        }
                     }
-                    .padding(.horizontal)
-
-                    Divider().padding(.horizontal)
+                    .padding()
 
                     // Extra Info
                     VStack(alignment: .leading, spacing: 8) {
-                        if let rating = shop.rating {
-                            Text("Rating: \(rating, specifier: "%.1f") ⭐️")
-                        }
-
-                        if let total = shop.user_ratings_total {
+                        if let total = noodleShop.user_ratings_total {
                             Text("Based on \(total) reviews")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
 
-                        if let openNow = shop.current_opening_hours?.open_now {
-                            Text(openNow ? "Open Now" : "Closed")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(openNow ? .green : .red)
-                        }
-
-                        if let servesBeer = shop.serves_beer, servesBeer {
-                            Label("Serves Beer", systemImage: "wineglass")
-                        }
-
-                        if let servesBreakfast = shop.serves_breakfast, servesBreakfast {
-                            Label("Serves Breakfast", systemImage: "sunrise")
-                        }
-
-                        if let hours = shop.current_opening_hours?.weekday_text {
+                        if let hours = noodleShop.current_opening_hours?.weekday_text {
                             Divider().padding(.vertical, 4)
                             Text("Hours:")
                                 .font(.headline)
@@ -94,7 +175,7 @@ struct NoodleShopDetailView: View {
                     .padding(.horizontal)
 
                     // Reviews
-                    if let reviews = shop.reviews, !reviews.isEmpty {
+                    if let reviews = noodleShop.reviews, !reviews.isEmpty {
                         Divider().padding(.horizontal)
 
                         VStack(alignment: .leading, spacing: 8) {
@@ -124,7 +205,7 @@ struct NoodleShopDetailView: View {
                     }
                 }
             }
-            .navigationTitle(shop.name)
+            .navigationTitle(noodleShop.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {

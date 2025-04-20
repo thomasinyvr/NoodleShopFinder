@@ -38,7 +38,9 @@ struct NoodleShop: Identifiable, Codable {
     let lat: Double
     let lng: Double
     let address: String
+    let vicinity: String
     let photo_url: String
+    let photo_reference: String?
     let website: String?
     let rating: Double?
     let price_level: Int?

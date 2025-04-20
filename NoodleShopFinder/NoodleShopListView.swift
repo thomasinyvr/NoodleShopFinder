@@ -6,66 +6,57 @@ struct NoodleShopListView: View {
     
     var filteredShops: [NoodleShop] {
         if searchText.isEmpty {
-            return viewModel.filteredShops
+            return viewModel.noodleShops
         } else {
-            return viewModel.filteredShops.filter { shop in
-                shop.name.localizedCaseInsensitiveContains(searchText)
+            return viewModel.noodleShops.filter { shop in
+                shop.name.localizedCaseInsensitiveContains(searchText) ||
+                shop.address.localizedCaseInsensitiveContains(searchText)
             }
         }
     }
     
     var body: some View {
-        List(filteredShops) { shop in
-            NavigationLink(destination: NoodleShopDetailView(shop: shop)) {
-                HStack {
-                    if let photoURL = shop.photo_url {
-                        AsyncImage(url: URL(string: photoURL)) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Color.gray.opacity(0.2)
-                        }
-                        .frame(width: 60, height: 60)
-                        .cornerRadius(8)
-                    } else {
-                        Color.gray.opacity(0.2)
-                            .frame(width: 60, height: 60)
-                            .cornerRadius(8)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(shop.name)
-                            .font(.headline)
-                        
-                        HStack {
-                            if let rating = shop.rating {
-                                Image(systemName: "star.fill")
-                                    .foregroundColor(.yellow)
-                                Text(String(format: "%.1f", rating))
-                            }
-                            
-                            if let servesBeer = shop.serves_beer, servesBeer {
-                                Image(systemName: "wineglass")
-                                    .foregroundColor(.blue)
-                            }
-                            
-                            if let openNow = shop.current_opening_hours?.open_now, openNow {
-                                Image(systemName: "clock")
-                                    .foregroundColor(.green)
+        NavigationView {
+            List(filteredShops) { shop in
+                NavigationLink(destination: NoodleShopDetailView(noodleShop: shop)) {
+                    HStack(spacing: 16) {
+                        // Shop Image
+                        AsyncImage(url: URL(string: shop.photo_url)) { phase in
+                            switch phase {
+                            case .empty:
+                                ProgressView()
+                                    .frame(width: 100, height: 100)
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 100, height: 100)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            case .failure:
+                                Image(systemName: "photo")
+                                    .frame(width: 100, height: 100)
+                                    .background(Color.gray.opacity(0.2))
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            @unknown default:
+                                EmptyView()
                             }
                         }
-                        .font(.subheadline)
                         
-                        Text(shop.vicinity)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(shop.name)
+                                .font(.headline)
+                                .lineLimit(2)
+                            Text(shop.address)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .lineLimit(2)
+                        }
                     }
+                    .padding(.vertical, 8)
                 }
-                .padding(.vertical, 4)
             }
+            .navigationTitle("Noodle Shops")
+            .searchable(text: $searchText, prompt: "Search shops")
         }
-        .searchable(text: $searchText, prompt: "Search noodle shops")
-        .navigationTitle("Noodle Shops")
     }
 }

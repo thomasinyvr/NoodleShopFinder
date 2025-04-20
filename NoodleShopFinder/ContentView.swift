@@ -43,7 +43,7 @@ struct ContentView: View {
                     }
                     .ignoresSafeArea()
                     .sheet(item: $selectedShop) { shop in
-                        NoodleShopDetailView(shop: shop)
+                        NoodleShopDetailView(noodleShop: shop)
                     }
                 }
                 
