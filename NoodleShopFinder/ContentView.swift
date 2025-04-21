@@ -10,6 +10,8 @@ struct ContentView: View {
     )
     @State private var selectedShop: NoodleShop?
     @State private var isShowingListView = false
+    @StateObject private var userService = UserService.shared
+    @State private var showingSettings = false
     
     var body: some View {
         NavigationView {
@@ -48,6 +50,21 @@ struct ContentView: View {
                 }
                 
                 FilterButtonsView(viewModel: viewModel, isShowingListView: $isShowingListView)
+            }
+            .navigationTitle("Noodle Shop Finder")
+            .toolbar {
+                if userService.isAuthenticated {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: {
+                            showingSettings = true
+                        }) {
+                            Image(systemName: "gear")
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView()
             }
         }
     }
